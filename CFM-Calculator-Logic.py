@@ -11,20 +11,46 @@ Use this tool to calculate airflow dynamics for PC builds, workstations, or serv
 - **Static Pressure**: Ability to push through obstructions (e.g., mesh, filters, rack walls)
 - **Wattage & Noise**: Power and acoustic levels
 
-### Pressure Strategy:
-- 🔴 **Negative Pressure**: More exhaust. Best thermal reduction. Requires dust filtering.
-- 🟢 **Positive Pressure**: More intake. Keeps out dust. Watch for heat pockets.
-- ⚪ **Neutral Pressure**: Balanced flow. Low turbulence, but not always efficient.
-
-### Airflow Design Applies to Both PCs and Server Rooms:
-- Think of a **server room as a PC case**:
-  - Servers = hardware components (CPU/GPU)
-  - Raised floors & racks = cable pathways & airflow corridors
-  - Fans in walls, ceilings, and AC ducts = intake & exhaust
-  - **Cold air at floor level, hot air rises to ceiling exhaust**
-
----
+### Volume Conversion:
+Enter your case or room volume to estimate air replacement needs.
 """)
+
+st.markdown("---")
+st.subheader("📏 Room/Case Volume")
+
+col_v1, col_v2 = st.columns(2)
+
+with col_v1:
+    volume_liters = st.number_input("Enter volume in Liters (L)", min_value=0.0, value=100.0, step=10.0, format="%.2f")
+    volume_m3 = volume_liters / 1000
+with col_v2:
+    volume_m3_input = st.number_input("Or enter volume in Cubic Meters (m³)", min_value=0.0, value=volume_m3, step=0.1, format="%.3f")
+    if volume_m3_input != volume_m3:
+        volume_liters = volume_m3_input * 1000
+        volume_m3 = volume_m3_input
+
+st.write(f"📦 Volume: **{volume_liters:.2f} L** / **{volume_m3:.3f} m³**")
+
+st.markdown("""
+---
+### ⚡ Air Replacement Efficiency
+This estimates how fast your airflow can cycle the total air in your space:
+- 1 m³ = 35.3147 ft³
+- CFM = Cubic Feet per Minute
+""")
+
+total_airflow_cfm = intake_stats['Total CFM'] + exhaust_stats['Total CFM']
+volume_ft3 = volume_m3 * 35.3147
+
+if volume_ft3 > 0:
+    air_cycles_per_minute = total_airflow_cfm / volume_ft3
+    air_cycles_per_hour = air_cycles_per_minute * 60
+    st.metric("Air Cycles Per Minute", f"{air_cycles_per_minute:.2f}")
+    st.metric("Air Cycles Per Hour (ACH)", f"{air_cycles_per_hour:.1f}")
+else:
+    st.warning("Please enter a valid volume to calculate air replacement.")
+
+st.caption("These figures estimate how often the air in the case or room is fully replaced.")
 
 # Section 0: Templates
 st.sidebar.header("💡 Load Template")
