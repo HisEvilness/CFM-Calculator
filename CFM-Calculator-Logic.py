@@ -89,6 +89,14 @@ def load_template(name):
     else:
         return pd.DataFrame(columns=fan_cols)
 
+def calc_totals(df):
+    return {
+        "Total CFM": df["CFM"].sum(),
+        "Total Watts Low": df["Watts Low"].sum(),
+        "Total Watts High": df["Watts High"].sum(),
+        "Avg dB": df[["dB Low", "dB High"]].mean(axis=1).mean()
+    }
+
 default = load_template(template)
 tabs = st.tabs(["Intake Fans", "Exhaust Fans", "Hardware/Server Nodes"])
 
@@ -104,22 +112,12 @@ with tabs[2]:
     st.subheader("Hardware/Server Cooling Units")
     hardware_df = st.data_editor(default.iloc[5:], num_rows="dynamic", key="hardware")
 
-def calc_totals(df):
-    return {
-        "Total CFM": df["CFM"].sum(),
-        "Total Watts Low": df["Watts Low"].sum(),
-        "Total Watts High": df["Watts High"].sum(),
-        "Avg dB": df[["dB Low", "dB High"]].mean(axis=1).mean()
-    }
-
 intake_stats = calc_totals(intake_df)
+st.session_state.intake_stats = intake_stats
 exhaust_stats = calc_totals(exhaust_df)
+st.session_state.exhaust_stats = exhaust_stats
 hardware_stats = calc_totals(hardware_df)
 
-st.session_state.intake_stats = intake_stats
-st.session_state.exhaust_stats = exhaust_stats
-
-# Air volume logic
 total_airflow_cfm = intake_stats['Total CFM'] + exhaust_stats['Total CFM']
 volume_ft3 = volume_m3 * 35.3147
 
@@ -131,7 +129,6 @@ if volume_ft3 > 0:
 else:
     st.warning("Please enter a valid volume to calculate air replacement.")
 
-# Pressure type
 cfm_diff = intake_stats['Total CFM'] - exhaust_stats['Total CFM']
 pressure_type = "Neutral"
 if cfm_diff > 10:
