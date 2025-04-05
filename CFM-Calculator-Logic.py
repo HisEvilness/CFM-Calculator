@@ -23,6 +23,7 @@ col_v1, col_v2 = st.columns(2)
 with col_v1:
     volume_liters = st.number_input("Enter volume in Liters (L)", min_value=0.0, value=100.0, step=10.0, format="%.2f")
     volume_m3 = volume_liters / 1000
+
 with col_v2:
     volume_m3_input = st.number_input("Or enter volume in Cubic Meters (m³)", min_value=0.0, value=volume_m3, step=0.1, format="%.3f")
     if volume_m3_input != volume_m3:
@@ -39,20 +40,7 @@ This estimates how fast your airflow can cycle the total air in your space:
 - CFM = Cubic Feet per Minute
 """)
 
-total_airflow_cfm = intake_stats['Total CFM'] + exhaust_stats['Total CFM']
-volume_ft3 = volume_m3 * 35.3147
-
-if volume_ft3 > 0:
-    air_cycles_per_minute = total_airflow_cfm / volume_ft3
-    air_cycles_per_hour = air_cycles_per_minute * 60
-    st.metric("Air Cycles Per Minute", f"{air_cycles_per_minute:.2f}")
-    st.metric("Air Cycles Per Hour (ACH)", f"{air_cycles_per_hour:.1f}")
-else:
-    st.warning("Please enter a valid volume to calculate air replacement.")
-
-st.caption("These figures estimate how often the air in the case or room is fully replaced.")
-
-# Section 0: Templates
+# Template Loader
 st.sidebar.header("💡 Load Template")
 template = st.sidebar.selectbox(
     "Choose a system layout:",
@@ -61,7 +49,6 @@ template = st.sidebar.selectbox(
 
 fan_cols = ["Fan Name", "Static Pressure (mmH2O)", "CFM", "Watts Low", "Watts High", "dB Low", "dB High"]
 
-# Template Loader
 def load_template(name):
     if name == "Mid-Tower Gaming PC":
         return pd.DataFrame([
@@ -102,10 +89,8 @@ def load_template(name):
     else:
         return pd.DataFrame(columns=fan_cols)
 
-# Section 1: Input Tables
-tabs = st.tabs(["Intake Fans", "Exhaust Fans", "Hardware/Server Nodes"])
-
 default = load_template(template)
+tabs = st.tabs(["Intake Fans", "Exhaust Fans", "Hardware/Server Nodes"])
 
 with tabs[0]:
     st.subheader("Intake Fans")
@@ -119,15 +104,6 @@ with tabs[2]:
     st.subheader("Hardware/Server Cooling Units")
     hardware_df = st.data_editor(default.iloc[5:], num_rows="dynamic", key="hardware")
 
-# Pressure Strategy Selection
-st.subheader("⚙️ Preferred Pressure Strategy")
-user_pref = st.radio(
-    "Select your desired airflow strategy:",
-    ("Auto Detect", "Negative Pressure", "Positive Pressure", "Neutral Pressure"),
-    index=0
-)
-
-# Calculation Logic
 def calc_totals(df):
     return {
         "Total CFM": df["CFM"].sum(),
@@ -140,6 +116,22 @@ intake_stats = calc_totals(intake_df)
 exhaust_stats = calc_totals(exhaust_df)
 hardware_stats = calc_totals(hardware_df)
 
+st.session_state.intake_stats = intake_stats
+st.session_state.exhaust_stats = exhaust_stats
+
+# Air volume logic
+total_airflow_cfm = intake_stats['Total CFM'] + exhaust_stats['Total CFM']
+volume_ft3 = volume_m3 * 35.3147
+
+if volume_ft3 > 0:
+    air_cycles_per_minute = total_airflow_cfm / volume_ft3
+    air_cycles_per_hour = air_cycles_per_minute * 60
+    st.metric("Air Cycles Per Minute", f"{air_cycles_per_minute:.2f}")
+    st.metric("Air Cycles Per Hour (ACH)", f"{air_cycles_per_hour:.1f}")
+else:
+    st.warning("Please enter a valid volume to calculate air replacement.")
+
+# Pressure type
 cfm_diff = intake_stats['Total CFM'] - exhaust_stats['Total CFM']
 pressure_type = "Neutral"
 if cfm_diff > 10:
@@ -148,9 +140,8 @@ elif cfm_diff < -10:
     pressure_type = "Negative"
 
 optimal_cfm = hardware_stats['Total CFM'] * 1.25
-surplus_airflow = intake_stats['Total CFM'] + exhaust_stats['Total CFM'] - hardware_stats['Total CFM']
+surplus_airflow = total_airflow_cfm - hardware_stats['Total CFM']
 
-# Output Metrics
 st.markdown("---")
 st.header("📊 Cooling Performance Summary")
 col1, col2, col3 = st.columns(3)
@@ -167,28 +158,10 @@ st.subheader("🔍 Analysis")
 st.write(f"**Detected Pressure Type**: {pressure_type} Pressure ({cfm_diff:+.2f} CFM)")
 st.write(f"**Surplus vs Hardware CFM**: {surplus_airflow:.2f} CFM")
 st.write(f"**Optimal Target (125% of Hardware/Server CFM)**: {optimal_cfm:.2f} CFM")
-if user_pref != "Auto Detect":
-    st.info(f"🔧 You selected **{user_pref}** airflow strategy.")
-if surplus_airflow < 0:
-    st.warning("⚠️ Airflow is insufficient. Consider adding more fans or optimizing intake/exhaust positioning.")
-elif surplus_airflow > optimal_cfm:
-    st.info("ℹ️ Airflow may be excessive and could cause turbulence or recirculation. Tune flow path.")
-else:
-    st.success("✅ Airflow is within optimal cooling range.")
+
+st.caption("These figures estimate how often the air in the case or room is fully replaced.")
 
 st.markdown("""
-**Cooling Design Recommendations:**
-- Negative Pressure: Max cooling. Must use dust filtering.
-- Positive Pressure: Reduces dust. Use for cleaner data centers.
-- Neutral Pressure: Balanced and quiet.
-
-General Tips:
-- Cold air enters low, hot air exits high.
-- Avoid turbulence: streamline fan layout.
-- Isolate hot/cold aisles in server rooms.
-- Raise PCs off the floor to reduce dust.
-- Use PWM hubs or motherboard fan curves.
-
 ---
 **Author**: Paul "HisEvilness" Ripmeester  
 [Case Airflow Guide Part I](https://www.hisevilness.com/articles/tech-oc-ing-seo-and-more/case-airflow-best-cooling-practises.html)  
