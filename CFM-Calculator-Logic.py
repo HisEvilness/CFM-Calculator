@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import json
-import plotly.express as px
 
 st.set_page_config(page_title="CFM & Case Airflow Calculator", layout="wide")
 st.title("💨 Case & Server Cooling CFM & Static Pressure Calculator")
@@ -130,15 +129,12 @@ st.markdown(f"<div style='background-color:{color}; padding: 10px; border-radius
 st.write(f"**Surplus vs Hardware CFM**: {surplus_airflow:.2f} CFM")
 st.write(f"**Optimal Target (125% of Hardware/Server CFM)**: {optimal_cfm:.2f} CFM")
 
-# Flow Chart using Plotly
+# Flow Chart using Streamlit Native Bar Chart
 st.subheader("🔄 Airflow Distribution Chart")
 cfm_chart = pd.DataFrame({
-    "Type": ["Intake", "Exhaust", "Hardware"],
     "CFM": [intake_stats['Total CFM'], exhaust_stats['Total CFM'], hardware_stats['Total CFM']]
-})
-fig = px.bar(cfm_chart, x="Type", y="CFM", color="Type", text="CFM",
-             color_discrete_sequence=["#1f77b4", "#d62728", "#ff7f0e"], title="CFM Comparison")
-st.plotly_chart(fig, use_container_width=True)
+}, index=["Intake", "Exhaust", "Hardware"])
+st.bar_chart(cfm_chart)
 
 st.caption("These figures estimate how often the air in the case or room is fully replaced.")
 
