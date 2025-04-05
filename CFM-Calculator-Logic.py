@@ -22,9 +22,11 @@ Use this tool to calculate airflow dynamics for PC builds, workstations, or serv
   - Raised floors & racks = cable pathways & airflow corridors
   - Fans in walls, ceilings, and AC ducts = intake & exhaust
   - **Cold air at floor level, hot air rises to ceiling exhaust**
+
+---
 """)
 
-# --- Template Loader ---
+# Section 0: Templates
 st.sidebar.header("💡 Load Template")
 template = st.sidebar.selectbox(
     "Choose a system layout:",
@@ -33,6 +35,7 @@ template = st.sidebar.selectbox(
 
 fan_cols = ["Fan Name", "Static Pressure (mmH2O)", "CFM", "Watts Low", "Watts High", "dB Low", "dB High"]
 
+# Template Loader
 def load_template(name):
     if name == "Mid-Tower Gaming PC":
         return pd.DataFrame([
@@ -73,10 +76,10 @@ def load_template(name):
     else:
         return pd.DataFrame(columns=fan_cols)
 
-default = load_template(template)
-
-# --- Input Tables ---
+# Section 1: Input Tables
 tabs = st.tabs(["Intake Fans", "Exhaust Fans", "Hardware/Server Nodes"])
+
+default = load_template(template)
 
 with tabs[0]:
     st.subheader("Intake Fans")
@@ -89,3 +92,79 @@ with tabs[1]:
 with tabs[2]:
     st.subheader("Hardware/Server Cooling Units")
     hardware_df = st.data_editor(default.iloc[5:], num_rows="dynamic", key="hardware")
+
+# Pressure Strategy Selection
+st.subheader("⚙️ Preferred Pressure Strategy")
+user_pref = st.radio(
+    "Select your desired airflow strategy:",
+    ("Auto Detect", "Negative Pressure", "Positive Pressure", "Neutral Pressure"),
+    index=0
+)
+
+# Calculation Logic
+def calc_totals(df):
+    return {
+        "Total CFM": df["CFM"].sum(),
+        "Total Watts Low": df["Watts Low"].sum(),
+        "Total Watts High": df["Watts High"].sum(),
+        "Avg dB": df[["dB Low", "dB High"]].mean(axis=1).mean()
+    }
+
+intake_stats = calc_totals(intake_df)
+exhaust_stats = calc_totals(exhaust_df)
+hardware_stats = calc_totals(hardware_df)
+
+cfm_diff = intake_stats['Total CFM'] - exhaust_stats['Total CFM']
+pressure_type = "Neutral"
+if cfm_diff > 10:
+    pressure_type = "Positive"
+elif cfm_diff < -10:
+    pressure_type = "Negative"
+
+optimal_cfm = hardware_stats['Total CFM'] * 1.25
+surplus_airflow = intake_stats['Total CFM'] + exhaust_stats['Total CFM'] - hardware_stats['Total CFM']
+
+# Output Metrics
+st.markdown("---")
+st.header("📊 Cooling Performance Summary")
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Intake CFM", f"{intake_stats['Total CFM']:.2f}")
+    st.metric("Avg Intake Noise", f"{intake_stats['Avg dB']:.1f} dB")
+with col2:
+    st.metric("Exhaust CFM", f"{exhaust_stats['Total CFM']:.2f}")
+    st.metric("Avg Exhaust Noise", f"{exhaust_stats['Avg dB']:.1f} dB")
+with col3:
+    st.metric("Hardware Cooling CFM", f"{hardware_stats['Total CFM']:.2f}")
+
+st.subheader("🔍 Analysis")
+st.write(f"**Detected Pressure Type**: {pressure_type} Pressure ({cfm_diff:+.2f} CFM)")
+st.write(f"**Surplus vs Hardware CFM**: {surplus_airflow:.2f} CFM")
+st.write(f"**Optimal Target (125% of Hardware/Server CFM)**: {optimal_cfm:.2f} CFM")
+if user_pref != "Auto Detect":
+    st.info(f"🔧 You selected **{user_pref}** airflow strategy.")
+if surplus_airflow < 0:
+    st.warning("⚠️ Airflow is insufficient. Consider adding more fans or optimizing intake/exhaust positioning.")
+elif surplus_airflow > optimal_cfm:
+    st.info("ℹ️ Airflow may be excessive and could cause turbulence or recirculation. Tune flow path.")
+else:
+    st.success("✅ Airflow is within optimal cooling range.")
+
+st.markdown("""
+**Cooling Design Recommendations:**
+- Negative Pressure: Max cooling. Must use dust filtering.
+- Positive Pressure: Reduces dust. Use for cleaner data centers.
+- Neutral Pressure: Balanced and quiet.
+
+General Tips:
+- Cold air enters low, hot air exits high.
+- Avoid turbulence: streamline fan layout.
+- Isolate hot/cold aisles in server rooms.
+- Raise PCs off the floor to reduce dust.
+- Use PWM hubs or motherboard fan curves.
+
+---
+**Author**: Paul "HisEvilness" Ripmeester  
+[Case Airflow Guide Part I](https://www.hisevilness.com/articles/tech-oc-ing-seo-and-more/case-airflow-best-cooling-practises.html)  
+[Case Airflow Guide Part II](https://www.hisevilness.com/articles/technology/case-airflow-best-cooling-practices-part-ii.html?showall=1)
+""")
