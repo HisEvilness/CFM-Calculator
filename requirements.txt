@@ -1,4 +1,4 @@
 streamlit
 pandas
 json
-plotly.express
+plotly
